@@ -107,7 +107,7 @@ class rDG1022:
                 verbose = True
                 
         # sleep for a bit
-        time.sleep(self.sleepVal)
+        #time.sleep(self.sleepVal)
         
         # REQUEST_DEV_DEP_MSG_IN
         # This function sends a message authorizing the device to respond
@@ -279,7 +279,7 @@ class rDG1022:
         self.dev.reset()
 
         # sleep for a bit
-        time.sleep(self.sleepVal)
+        #time.sleep(self.sleepVal)
         
         if verbose:
             print("Message: " + str(bmsg))
@@ -312,7 +312,7 @@ class rDG1022:
         self.dev.ctrl_transfer(0xA1, 0x05, 0x00, 0x00, 0x01)
 
         #Wait for device to do what we asked
-        time.sleep(0.1)
+        #time.sleep(0.1)
 
         if verbose:
             print("Checking clear status. \n")
@@ -338,8 +338,8 @@ class rDG1022:
 
 
         
-
-    def read(self,msgtype,**kwargs):
+#TODO: Add fault tolerance to read() for cases where there's nothing to read.
+    def read(self,**kwargs):
         # Check for verbose (debug) mode
         verbose = False
         if "verbose" in kwargs:
@@ -349,12 +349,12 @@ class rDG1022:
                 verbose = True
             
         # Authorize device spitting out response
-        time.sleep(0.1)
+        #time.sleep(0.1)
         if verbose:
             print("Authorizing device to respond to query");
         bcommand = self.bulkin_auth()
         self.writeCommand(bcommand)
-        time.sleep(0.1)
+        #time.sleep(0.1)
         
         # Read device's response
         if verbose:
@@ -442,7 +442,7 @@ class rDG1022:
             
             while msg_remainder > 0:
                 self.bulkin_auth()
-                time.sleep(0.1) #take a breather
+                #time.sleep(0.1) #take a breather
                 inData = self.dev.read(self.ep_in.bEndpointAddress,msg_remainder)
                 
                 # Transfer input into a byte array
@@ -473,6 +473,8 @@ class rDG1022:
                 print("Read operation successful.\n\n")
                 
         return message+nmsg
+
+
     
     ##################################################
     #                Specific Functions              #
@@ -480,6 +482,13 @@ class rDG1022:
     
     # This part of the file enumerates some device-specific functions
     # that build on the API developed above.
+
+    # Ask a question of the device and get a response
+    def query(self, msg):
+        bmsg = self.compose_message(msg)
+        self.writeCommand(bmsg)
+        retval = self.read()
+        return(retval)
 
     def v1(self, voltage):
         cmd = self.compose_message("VOLT " + str(voltage))
