@@ -96,8 +96,8 @@ class rDG1022:
                                      str(ep.bEndpointAddress) + \
                                      '\n')
 
-  #TODO: add support for different message types
-    def bulkin_auth(self,msgtype,**kwargs):
+# Send a message to the device authorizing it to respond to a previous request.
+    def bulkin_auth(self,**kwargs):
         # Check for verbose (debug) mode
         verbose = False
         if "verbose" in kwargs:
@@ -109,13 +109,9 @@ class rDG1022:
         # sleep for a bit
         time.sleep(self.sleepVal)
         
-        if(msgtype==1):
-            # REQUEST_DEV_DEP_MSG_IN
-            # This function sends a message authorizing the device to respond
-            self.MsgID = 2
-        # This option is for vendor-specific messages
-        elif(msgtype==126):
-            self.MsgID = 127
+        # REQUEST_DEV_DEP_MSG_IN
+        # This function sends a message authorizing the device to respond
+        self.MsgID = 2
         #
         # Header Data
         #
@@ -131,7 +127,7 @@ class rDG1022:
         # Then, 0x00 just because that's what we do per spec
         retval.append(0x00)
         
-        # Then, USBTMC Command messsage specific header (8 words)
+        # Then, USBTMC Command messsage specific header (8 bytes)
         
         # Bytes 4-7 send the transfer size in bytes, not including 
         # any alignment bytes or header bytes. Little Endian. 
@@ -173,7 +169,7 @@ class rDG1022:
         self.bTagIncrement()
         return retval
     
-    def compose_message(self,text,msgType,**kwargs):
+    def compose_message(self,text,**kwargs):
         # Check for verbose (debug) mode
         verbose = False
         if "verbose" in kwargs:
@@ -182,8 +178,9 @@ class rDG1022:
                 print("Starting compose_message() operation in verbose mode.")
                 verbose = True
                 
-        # This is a user-defined message type
-        self.MsgID = msgType
+        # We want a device-specific message using the bulk-in and bulk-out communication ports.
+        self.MsgID = 1
+
         # First, convert our message to bytes and get its size
         text_b = str.encode(text)
         xferSize = len(text_b)
@@ -203,7 +200,7 @@ class rDG1022:
         # Then, 0x00 just because that's what we do per spec
         retval.append(0x00)
         
-        # Then, USBTMC Command messsage specific header (8 words)
+        # Then, USBTMC Command messsage specific header (8 bytes)
         
         # Bytes 4-7 send the transfer size in bytes, not including 
         # any alignment bytes or header bytes. Little Endian. 
@@ -268,6 +265,7 @@ class rDG1022:
         else:
             self.bTag=1
         
+    # Write a command to the bulk IN port
     def writeCommand(self,bmsg, **kwargs):
         # Check for verbose (debug) mode
         verbose = False
@@ -277,11 +275,13 @@ class rDG1022:
                 print("Starting writeCommand() operation in verbose mode.")
                 verbose = True
                 
+        #Reset device to ensure a fresh transaction (prevents weird timeout errors)
+        self.dev.reset()
+
         # sleep for a bit
         time.sleep(self.sleepVal)
         
         if verbose:
-            print("\n Sending command message. ")
             print("Message: " + str(bmsg))
             print("To endpoint: " + str(self.ep_out.bEndpointAddress))
         
@@ -291,9 +291,54 @@ class rDG1022:
         self.bTagIncrement()
         
         if verbose:
-            print("writeCommand() successful. \n\n")
+            print("writeCommand() successful. \n")
 
-# TODO: add support for all message types
+    # Write a message to the control endpoint to reset the interface.
+    def writeClear(self, **kwargs):
+        verbose = False
+        if "verbose" in kwargs:
+            if kwargs["verbose"]=="True":
+                print("-------------------------------------------")
+                print("Starting writeClear() operation in verbose mode.")
+                verbose = True
+
+        message = bytearray()
+        
+        # Making a control request to reset the interface
+        #bmRequest Type = 0xA1
+        #bRequest = 0x05 
+        # wValue = 0x00
+        # wIndex = 0x00
+        self.dev.ctrl_transfer(0xA1, 0x05, 0x00, 0x00, 0x01)
+
+        #Wait for device to do what we asked
+        time.sleep(0.1)
+
+        if verbose:
+            print("Checking clear status. \n")
+        # Checking if our clear status completed.
+        #bmRequest Type = 0xA1
+        #bRequest = 0x06 
+        # wValue = 0x00
+        # wIndex = 0x00
+        # wLength = 0x02
+        ret = self.dev.ctrl_transfer(0xA1, 0x06, 0x00, 0x00, 0x02)
+        
+        sret = ""
+        for x in ret:
+            sret += hex(x) + " "
+
+        if verbose:
+            print("Machine response: " + sret)
+
+        if verbose:
+            print("writeClear() successful. \n\n ")
+
+        #TODO: add a thrown exception if we get anything but 0x01 back.
+
+
+        
+
     def read(self,msgtype,**kwargs):
         # Check for verbose (debug) mode
         verbose = False
@@ -305,7 +350,9 @@ class rDG1022:
             
         # Authorize device spitting out response
         time.sleep(0.1)
-        bcommand = self.bulkin_auth(msgtype)
+        if verbose:
+            print("Authorizing device to respond to query");
+        bcommand = self.bulkin_auth()
         self.writeCommand(bcommand)
         time.sleep(0.1)
         
@@ -394,7 +441,7 @@ class rDG1022:
             newbytes = bytearray()
             
             while msg_remainder > 0:
-                self.bulkin_auth(msgtype)
+                self.bulkin_auth()
                 time.sleep(0.1) #take a breather
                 inData = self.dev.read(self.ep_in.bEndpointAddress,msg_remainder)
                 
@@ -435,25 +482,25 @@ class rDG1022:
     # that build on the API developed above.
 
     def v1(self, voltage):
-        cmd = self.compose_message("VOLT " + str(voltage),1)
+        cmd = self.compose_message("VOLT " + str(voltage))
         self.writeCommand(cmd)
         
     def v2(self, voltage):
-        cmd = self.compose_message("VOLT:CH2 " + str(voltage),1)
+        cmd = self.compose_message("VOLT:CH2 " + str(voltage))
         self.writeCommand(cmd)
         
     def ch1(self):
-        cmd = self.compose_message("OUTP ON",1)
+        cmd = self.compose_message("OUTP ON")
         self.writeCommand(cmd)
         
     def ch2(self):
-        cmd = self.compose_message("OUTP:CH2 ON",1)
+        cmd = self.compose_message("OUTP:CH2 ON")
         self.writeCommand(cmd)
         
     def f1(self, frequency):
-        cmd = self.compose_message("FREQ " + str(frequency),1)
+        cmd = self.compose_message("FREQ " + str(frequency))
         self.writeCommand(cmd)
         
     def f2(self, frequency):
-        cmd = self.compose_message("FREQ:CH2 " + str(frequency),1)
+        cmd = self.compose_message("FREQ:CH2 " + str(frequency))
         self.writeCommand(cmd)
