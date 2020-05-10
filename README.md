@@ -13,8 +13,9 @@ Several methods for connecting USBTMC-compliant instruments already exist on Lin
 Since none of the existing libraries worked for my device, I wrote this one.
 
 ## Project Status
-This is just barely working at this point. I've been able to get it going and do some interesting things with Jupyter notebooks and Interact widgets.
+This is working pretty consistently for me, but needs some polish. I've been able to get it going and do some interesting things with Jupyter notebooks and Interact widgets.
+
 Still to do:
 - Proper documentation
 - Fuller API implementation
-- Query commands (right now setting and ID work - but that's all)
+- Easy API for generating waveforms including strings of bytes for testing serial comm devices.
